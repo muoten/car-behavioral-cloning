@@ -21,10 +21,13 @@ app = Flask(__name__)
 model = None
 prev_image_array = None
 
-MAX_SPEED = 25
+MAX_SPEED = 100
 MIN_SPEED = 10
 
 speed_limit = MAX_SPEED
+TRACE=False
+iteration=0
+score=0
 
 @sio.on('telemetry')
 def telemetry(sid, data):
@@ -60,7 +63,16 @@ def telemetry(sid, data):
                 speed_limit = MAX_SPEED
             throttle = 1.0 - steering_angle**2 - (speed/speed_limit)**2
 
-            print('{} {} {}'.format(steering_angle, throttle, speed))
+            if TRACE==True:
+                print('{} {} {}'.format(steering_angle, throttle, speed))
+
+            global score
+            score += speed
+            global iteration
+            iteration+=1
+            if (iteration%100) == 0:
+                print('Avg speed: {}, score: {}'.format(score / iteration, score))
+
             steering_angle = steering_angle.__str__().replace(".", ",")
             throttle = throttle.__str__().replace(".", ",")
 
