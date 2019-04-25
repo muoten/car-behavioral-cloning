@@ -30,11 +30,11 @@ speed_limit = MAX_SPEED
 def telemetry(sid, data):
     if data:
         # The current steering angle of the car
-        steering_angle = float(data["steering_angle"])
+        steering_angle = float(data["steering_angle"].replace(",", "."))
         # The current throttle of the car
-        throttle = float(data["throttle"])
+        throttle = float(data["throttle"].replace(",", "."))
         # The current speed of the car
-        speed = float(data["speed"])
+        speed = float(data["speed"].replace(",", "."))
         # The current image from the center camera of the car
         image = Image.open(BytesIO(base64.b64decode(data["image"])))
         # save frame
@@ -61,6 +61,9 @@ def telemetry(sid, data):
             throttle = 1.0 - steering_angle**2 - (speed/speed_limit)**2
 
             print('{} {} {}'.format(steering_angle, throttle, speed))
+            steering_angle = steering_angle.__str__().replace(".", ",")
+            throttle = throttle.__str__().replace(".", ",")
+
             send_control(steering_angle, throttle)
         except Exception as e:
             print(e)
