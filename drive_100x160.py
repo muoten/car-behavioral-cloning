@@ -15,11 +15,7 @@ from io import BytesIO
 from keras.models import load_model
 
 import utils
-
-from config import *
-import cv2
-from skimage.feature import *
-
+INPUT_SHAPE=(100,160,3)
 
 sio = socketio.Server()
 app = Flask(__name__)
@@ -30,30 +26,9 @@ MAX_SPEED = 100
 MIN_SPEED = 10
 
 speed_limit = MAX_SPEED
-TRACE = False
-iteration = 0
-score = 0
-
-
-def preprocess(image):
-
-    img = cv2.normalize(image, image, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
-    # crop image:
-    img = img[Y_CROP:Y_CROP2, :, :]
-    # resize image:
-    img = cv2.resize(img, (X_PIX, Y_PIX), interpolation=cv2.INTER_CUBIC)
-    # grayscale
-    img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    # resize again
-    img_gray = Image.fromarray(np.uint8(256 * img_gray))
-    img_gray = img_gray.resize([int(0.5 * s) for s in img_gray.size], Image.ANTIALIAS)
-
-    # hog features
-    img_gray = hog(img_gray, pixels_per_cell=(8, 8))
-
-    return img_gray
-
-
+TRACE=False
+iteration=0
+score=0
 
 @sio.on('telemetry')
 def telemetry(sid, data):
@@ -71,15 +46,14 @@ def telemetry(sid, data):
             timestamp = datetime.utcnow().strftime('%Y_%m_%d_%H_%M_%S_%f')[:-3]
             image_filename = os.path.join(args.image_folder, timestamp)
             image.save('{}.jpg'.format(image_filename))
-
+            
         try:
-            image = np.asarray(image)  # from PIL image to numpy array
-            image = preprocess(image)  # apply the preprocessing
-            image = np.asarray(image).reshape(1, -1) # the model expects this shape
+            image = np.asarray(image)       # from PIL image to numpy array
+            image = utils.preprocess(image,INPUT_SHAPE) # apply the preprocessing
+            image = np.array([image])       # the model expects 4D array
 
             # predict the steering angle for the image
-            steering_angle = model.predict(image)[0]
-
+            steering_angle = float(model.predict(image, batch_size=1))
             # lower the throttle as the speed increases
             # if the speed is above the current speed limit, we are on a downhill.
             # make sure we slow down first and then go back to the original max speed.
@@ -88,16 +62,16 @@ def telemetry(sid, data):
                 speed_limit = MIN_SPEED  # slow down
             else:
                 speed_limit = MAX_SPEED
-            throttle = 1.0 - steering_angle ** 2 - (speed / speed_limit) ** 2
+            throttle = 1.0 - steering_angle**2 - (speed/speed_limit)**2
 
-            if TRACE == True:
+            if TRACE==True:
                 print('{} {} {}'.format(steering_angle, throttle, speed))
 
             global score
             score += speed
             global iteration
-            iteration += 1
-            if (iteration % 100) == 0:
+            iteration+=1
+            if (iteration%100) == 0:
                 print('Avg speed: {}, score: {}'.format(score / iteration, score))
 
             steering_angle = steering_angle.__str__().replace(".", ",")
@@ -106,7 +80,7 @@ def telemetry(sid, data):
             send_control(steering_angle, throttle)
         except Exception as e:
             print(e)
-
+        
     else:
         # NOTE: DON'T EDIT THIS.
         sio.emit('manual', data={}, skip_sid=True)
@@ -133,7 +107,7 @@ if __name__ == '__main__':
     parser.add_argument(
         'model',
         type=str,
-        help='Path to model file. Model should be on the same path.'
+        help='Path to model h5 file. Model should be on the same path.'
     )
     parser.add_argument(
         'image_folder',
@@ -142,18 +116,15 @@ if __name__ == '__main__':
         default='',
         help='Path to image folder. This is where the images from the run will be saved.'
     )
+
     parser.add_argument(
         'speed',
         type=int
     )
     args = parser.parse_args()
 
+    model = load_model(args.model)
     MAX_SPEED = args.speed
-
-    import pickle
-
-    PATH_TO_MODEL = args.model
-    model = pickle.load(open(PATH_TO_MODEL, 'rb'))
 
     if args.image_folder != '':
         print("Creating image folder at {}".format(args.image_folder))
